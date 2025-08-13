@@ -1,0 +1,125 @@
+version: '3.8'
+
+services:
+  # MongoDB Database
+  mongo:
+    image: mongo:6.0
+    container_name: chat-mongo
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    networks:
+      - chat-network
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017 --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ... other services ...
+  
+  client:
+    build: ./client    # Must be ./client (singular)
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./client:/app
+      - /app/node_modules
+    environment:
+      - CHOKIDAR_USEPOLLING=true
+    stdin_open: true
+    tty: true
+    depends_on:
+      - user-service
+      - messaging-service
+  # User Service - CORRECTED DEPENDS_ON SYNTAX
+  user-service:
+    build: ./user-service
+    container_name: user-service
+    ports:
+      - "3001:3001"
+    environment:
+      PORT: 3001
+      MONGO_URI: "mongodb://mongo:27017/userdb"
+      JWT_SECRET: "devops-secret-key"
+      JWT_EXPIRES_IN: "1h"
+    depends_on:  # FIXED SYNTAX
+      mongo:
+        condition: service_healthy
+    networks:
+      - chat-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      
+  # Messaging Service
+  messaging-service:
+    build: ./messaging-service
+    container_name: messaging-service
+    ports:
+      - "3002:3002"
+    environment:
+      PORT: 3002
+      MONGO_URI: "mongodb://mongo:27017/messagedb"
+      JWT_SECRET: "devops-secret-key"
+    depends_on:
+      mongo:
+        condition: service_healthy
+    networks:
+      - chat-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Presence Service
+  presence-service:
+    build: ./presence-service
+    container_name: presence-service
+    ports:
+      - "3003:3003"
+    environment:
+      PORT: 3003
+      JWT_SECRET: "devops-secret-key"
+    networks:
+      - chat-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3003/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Notification Service
+  notification-service:
+    build: ./notification-service
+    container_name: notification-service
+    ports:
+      - "3004:3004"
+    environment:
+      PORT: 3004
+      JWT_SECRET: "devops-secret-key"
+    networks:
+      - chat-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3004/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+# Define networks and volumes
+networks:
+  chat-network:
+    driver: bridge
+
+volumes:
+  mongo-data:
+    driver: local
+
+client:
+  build: ./client
+  ports:
+    - "3000:3000"
