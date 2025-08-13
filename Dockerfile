@@ -1,17 +1,15 @@
-# Build stage
+# Build stage for React app
 FROM node:18-alpine AS builder
-
-# Create and set working directory
 WORKDIR /app
 
-# First copy ONLY package files for efficient caching
-COPY project-root/package*.json ./
+# Copy package files
+COPY client/package*.json ./
 
 # Install dependencies
 RUN npm install
 
-# Copy all other files
-COPY project-root/. ./
+# Copy app source
+COPY client/ ./
 
 # Build the app
 RUN npm run build
